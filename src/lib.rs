@@ -22,7 +22,13 @@ pub struct Echo {
 
 impl Echo {
     pub fn from_rtt(rtt: f64, amplitude: f64) -> Self {
-        Self { sample_idx: 0, rtt, distance: rtt * SPEED_OF_SOUND / 2.0, amplitude, confidence: amplitude }
+        Self {
+            sample_idx: 0,
+            rtt,
+            distance: rtt * SPEED_OF_SOUND / 2.0,
+            amplitude,
+            confidence: amplitude,
+        }
     }
 }
 
@@ -38,46 +44,60 @@ pub struct SpatialPoint {
 /// Sonar pulse parameters.
 #[derive(Debug, Clone, Copy)]
 pub struct PulseConfig {
-    pub frequency: f64,       // Hz
-    pub duration: f64,        // seconds
-    pub sample_rate: f64,     // Hz
-    pub amplitude: f64,       // 0.0–1.0
+    pub frequency: f64,   // Hz
+    pub duration: f64,    // seconds
+    pub sample_rate: f64, // Hz
+    pub amplitude: f64,   // 0.0–1.0
 }
 
 impl Default for PulseConfig {
     fn default() -> Self {
-        Self { frequency: 40_000.0, duration: 0.001, sample_rate: 1_000_000.0, amplitude: 1.0 }
+        Self {
+            frequency: 40_000.0,
+            duration: 0.001,
+            sample_rate: 1_000_000.0,
+            amplitude: 1.0,
+        }
     }
 }
 
 /// Generate a sonar pulse signal.
 pub fn generate_pulse(config: &PulseConfig) -> Vec<f64> {
     let n_samples = (config.duration * config.sample_rate) as usize;
-    (0..n_samples).map(|i| {
-        let t = i as f64 / config.sample_rate;
-        config.amplitude * (2.0 * PI * config.frequency * t).sin()
-    }).collect()
+    (0..n_samples)
+        .map(|i| {
+            let t = i as f64 / config.sample_rate;
+            config.amplitude * (2.0 * PI * config.frequency * t).sin()
+        })
+        .collect()
 }
 
 /// Detect echoes in a return signal using threshold-based peak detection.
-pub fn detect_echoes(signal: &[f64], sample_rate: f64, threshold: f64, min_separation: f64) -> Vec<Echo> {
+pub fn detect_echoes(
+    signal: &[f64],
+    sample_rate: f64,
+    threshold: f64,
+    min_separation: f64,
+) -> Vec<Echo> {
     let min_sep_samples = (min_separation * sample_rate) as usize;
     let mut echoes = Vec::new();
     let mut last_peak = 0isize;
 
     for i in 1..signal.len().saturating_sub(1) {
-        if signal[i] > threshold && signal[i] > signal[i - 1] && signal[i] > signal[i + 1] {
-            if last_peak < 0 || (i as isize - last_peak) as usize >= min_sep_samples {
-                let rtt = i as f64 / sample_rate;
-                echoes.push(Echo {
-                    sample_idx: i,
-                    rtt,
-                    distance: rtt * SPEED_OF_SOUND / 2.0,
-                    amplitude: signal[i],
-                    confidence: signal[i],
-                });
-                last_peak = i as isize;
-            }
+        if signal[i] > threshold
+            && signal[i] > signal[i - 1]
+            && signal[i] > signal[i + 1]
+            && (last_peak < 0 || (i as isize - last_peak) as usize >= min_sep_samples)
+        {
+            let rtt = i as f64 / sample_rate;
+            echoes.push(Echo {
+                sample_idx: i,
+                rtt,
+                distance: rtt * SPEED_OF_SOUND / 2.0,
+                amplitude: signal[i],
+                confidence: signal[i],
+            });
+            last_peak = i as isize;
         }
     }
     echoes
@@ -85,26 +105,32 @@ pub fn detect_echoes(signal: &[f64], sample_rate: f64, threshold: f64, min_separ
 
 /// Simple delay-and-sum beamforming.
 pub fn beamform(signals: &[Vec<f64>], delays: &[f64], sample_rate: f64) -> Vec<f64> {
-    if signals.is_empty() || delays.len() != signals.len() { return vec![]; }
+    if signals.is_empty() || delays.len() != signals.len() {
+        return vec![];
+    }
     let max_len = signals.iter().map(|s| s.len()).max().unwrap_or(0);
-    if max_len == 0 { return vec![]; }
+    if max_len == 0 {
+        return vec![];
+    }
 
     let mut output = vec![0.0f64; max_len];
     let mut counts = vec![0usize; max_len];
 
     for (signal, &delay) in signals.iter().zip(delays.iter()) {
         let delay_samples = (delay * sample_rate).round() as isize;
-        for i in 0..signal.len() {
-            let out_idx = (i as isize + delay_samples) as isize;
+        for (i, &val) in signal.iter().enumerate() {
+            let out_idx = i as isize + delay_samples;
             if out_idx >= 0 && (out_idx as usize) < max_len {
-                output[out_idx as usize] += signal[i];
+                output[out_idx as usize] += val;
                 counts[out_idx as usize] += 1;
             }
         }
     }
 
     for i in 0..max_len {
-        if counts[i] > 0 { output[i] /= counts[i] as f64; }
+        if counts[i] > 0 {
+            output[i] /= counts[i] as f64;
+        }
     }
     output
 }
@@ -121,28 +147,41 @@ pub fn echo_to_spatial(echo: &Echo, angle: f64) -> SpatialPoint {
 
 /// Build a spatial map from multiple sonar sweeps at different angles.
 pub fn build_spatial_map(sweeps: &[(f64, Vec<Echo>)]) -> Vec<SpatialPoint> {
-    sweeps.iter().flat_map(|(angle, echoes)| {
-        echoes.iter().map(|e| echo_to_spatial(e, *angle))
-    }).collect()
+    sweeps
+        .iter()
+        .flat_map(|(angle, echoes)| echoes.iter().map(|e| echo_to_spatial(e, *angle)))
+        .collect()
 }
 
 /// Compute signal-to-noise ratio of a signal.
 pub fn compute_snr(signal: &[f64]) -> f64 {
-    if signal.len() < 2 { return 0.0; }
+    if signal.len() < 2 {
+        return 0.0;
+    }
     let mean: f64 = signal.iter().sum::<f64>() / signal.len() as f64;
     let signal_power: f64 = signal.iter().map(|x| x.powi(2)).sum::<f64>() / signal.len() as f64;
     let noise_power = (signal_power - mean * mean).max(0.0);
-    if noise_power == 0.0 { return f64::INFINITY; }
+    if noise_power == 0.0 {
+        return f64::INFINITY;
+    }
     10.0 * (signal_power / noise_power).log10()
 }
 
 /// Simple matched filter (cross-correlation with template).
 pub fn matched_filter(signal: &[f64], template: &[f64]) -> Vec<f64> {
-    if signal.len() < template.len() { return vec![]; }
+    if signal.len() < template.len() {
+        return vec![];
+    }
     let out_len = signal.len() - template.len() + 1;
-    (0..out_len).map(|i| {
-        signal[i..i + template.len()].iter().zip(template.iter()).map(|(s, t)| s * t).sum()
-    }).collect()
+    (0..out_len)
+        .map(|i| {
+            signal[i..i + template.len()]
+                .iter()
+                .zip(template.iter())
+                .map(|(s, t)| s * t)
+                .sum()
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -176,10 +215,7 @@ mod tests {
 
     #[test]
     fn test_beamform() {
-        let signals = vec![
-            vec![1.0, 2.0, 3.0, 0.0],
-            vec![0.0, 1.0, 2.0, 3.0],
-        ];
+        let signals = vec![vec![1.0, 2.0, 3.0, 0.0], vec![0.0, 1.0, 2.0, 3.0]];
         let delays = vec![0.0, 0.000001];
         let output = beamform(&signals, &delays, 1_000_000.0);
         assert!(!output.is_empty());
