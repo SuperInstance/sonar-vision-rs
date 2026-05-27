@@ -1,0 +1,9 @@
+[package]
+name = "sonar-vision"
+version = "0.1.0"
+edition = "2021"
+description = "Sonar/ultrasonic perception pipeline — beam forming, echo detection, spatial mapping"
+license = "MIT"
+keywords = ["sonar", "ultrasonic", "beamforming", "dsp", "perception"]
+
+[dependencies]
