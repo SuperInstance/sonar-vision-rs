@@ -1,0 +1,11 @@
+[package]
+name = "sonar-vision"
+version = "0.1.0"
+edition = "2021"
+description = "Sonar signal processing, spatial mapping, and ASCII radar visualization — Rust port of sonar-vision"
+license = "MIT"
+keywords = ["sonar", "signal-processing", "dft", "radar", "visualization"]
+categories = ["science", "algorithms", "visualization"]
+repository = "https://github.com/SuperInstance/sonar-vision-rs"
+
+[dependencies]
